@@ -30,7 +30,8 @@ export const RADIANCE_SINCE = '9999'
 const verKey = v => v.split('.').map(Number)
 const verCmp = (a, b) => { const x = verKey(a), y = verKey(b); return x[0] - y[0] || (x[1] || 0) - (y[1] || 0) }
 
-export function analyse(account, bannerData) {
+// idJson: src/idJson.json (passed in, so this module also runs under Node for tests)
+export function analyse(account, bannerData, { extras = {}, idJson = {} } = {}) {
   const { pools, issues } = judge(account.result, bannerData)
 
   // version of a record: its banner's version, else (standard warp) by date
@@ -76,6 +77,11 @@ export function analyse(account, bannerData) {
   const versions = [...perVersion.values()].sort((a, b) => verCmp(a.version, b.version))
   for (const v of versions) v.fives.sort((a, b) => (a.time < b.time ? -1 : 1))
   const limited = new Set(bannerData.banners.filter(b => b.kind === 'character').flatMap(b => b.up5))
-  const collection = buildCollection(pools, f => limited.has(f.itemId))
-  return { pools, issues, rate, radiance: null, versions, collection }
+  // every 5★ / S-rank character, in the account's language, for adding copies obtained outside the gacha
+  const names = idJson[account.lang] || idJson['en-us'] || {}
+  const characters = Object.entries(names).filter(([id, v]) => id.length === 4 && !id.startsWith('8') && String(v.rank_type) === '5')
+    .map(([id, v]) => ({ id, name: v.name }))
+  const nameOf = id => characters.find(c => c.id === id)?.name
+  const collection = buildCollection(pools, f => limited.has(f.itemId), extras, nameOf)
+  return { pools, issues, rate, radiance: null, versions, collection, characters }
 }

@@ -14,6 +14,7 @@ require('./excel')
 require('./UIGFJson')
 require('./banners')
 require('./icons')
+require('./collectionExtra')
 const { getUpdateInfo } = require('./update/index')
 
 const isDev = !app.isPackaged
