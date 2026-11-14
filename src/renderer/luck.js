@@ -2,10 +2,19 @@
 // top = share of players who did better than you (ties count half), so
 //   top 0.05 -> luckier than 95% of players.
 // Purely for fun: it leans on community models of the rates.
+//
+// Distributions are arrays indexed by value: d[n] = P(X = n).
 import { pityModel } from './analysis.js'
 
-// chance that a non-guaranteed 5★ is the rate-up one
+// ---- game rules (the only Star Rail-specific part) ------------------------------------
+
+// chance that a non-guaranteed 5★ is a rate-up one; null = no rate-up rule
 export const UP_CHANCE = { character: 0.5, lightcone: 0.75 }
+export function upChance(kind) {
+  return UP_CHANCE[kind] ?? null
+}
+
+// ---- tiers -----------------------------------------------------------------------------
 
 export const TIERS = [
   { key: 'blessed', max: 0.05 },
@@ -16,79 +25,179 @@ export const TIERS = [
 ]
 export const tierOf = top => TIERS.find(t => top <= t.max)?.key ?? 'cursed'
 
+// threshold for "吃满大保底": the loss and the guarantee both ran into soft pity
+export const FULL_PITY = 150
+
+// ---- distribution helpers --------------------------------------------------------------
+
 function erf(x) {
   // Abramowitz-Stegun 7.1.26, |error| < 1.5e-7
   const s = Math.sign(x), a = Math.abs(x), t = 1 / (1 + 0.3275911 * a)
-  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a)
-  return s * y
+  return s * (1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a))
 }
 const normCdf = z => 0.5 * (1 + erf(z / Math.SQRT2))
 
-const momentsCache = new WeakMap()
-function moments(pmf) {
-  if (!momentsCache.has(pmf)) {
-    const mean = pmf.reduce((s, p, i) => s + (i + 1) * p, 0)
-    const varr = pmf.reduce((s, p, i) => s + (i + 1 - mean) ** 2 * p, 0)
-    momentsCache.set(pmf, { mean, sd: Math.sqrt(varr) })
+function convolve(a, b, maxV = Infinity) {
+  const n = Math.min(a.length + b.length - 1, maxV + 1)
+  const out = new Float64Array(Math.max(n, 1))
+  for (let i = 0; i < a.length && i < n; i++) {
+    if (!a[i]) continue
+    for (let j = 0; j < b.length && i + j < n; j++) out[i + j] += a[i] * b[j]
   }
-  return momentsCache.get(pmf)
+  return out
+}
+const cdfAt = (d, x) => { let c = 0; for (let v = 0; v <= x && v < d.length; v++) c += d[v]; return Math.min(1, c) }
+function moments(d) {
+  let m = 0, v = 0
+  d.forEach((p, x) => { m += p * x })
+  d.forEach((p, x) => { v += p * (x - m) ** 2 })
+  return { mean: m, sd: Math.sqrt(v) }
 }
 
-// P(the k-th 5★ arrives within T pulls) = P(S_k <= T), S_k = sum of k pity counts.
-// Exact convolution for small k, normal approximation (with continuity correction) above.
-export function sumCdf(pmf, k, T) {
-  if (k <= 0) return 1
-  if (T < k) return 0
+const cache = new Map()
+const memo = (key, fn) => { if (!cache.has(key)) cache.set(key, fn()); return cache.get(key) }
+
+// pulls for one 5★
+export const pityDist = kind => memo(`pity:${kind}`, () => Float64Array.from([0, ...pityModel(kind).pmf]))
+
+// pulls for one rate-up 5★ when the first 5★ is a q chance at the rate-up: S, or S + S'
+export function costDist(kind, q) {
+  return memo(`cost:${kind}:${q}`, () => {
+    const s = pityDist(kind), ss = convolve(s, s)
+    const out = new Float64Array(ss.length)
+    s.forEach((p, v) => { out[v] += q * p })
+    ss.forEach((p, v) => { out[v] += (1 - q) * p })
+    return out
+  })
+}
+
+// P(first + k-1 copies of `each` <= x); exact up to 40 terms, normal approximation above
+function sumCdf(each, k, x, first = each) {
+  if (k <= 0) return x >= 0 ? 1 : 0
+  if (x < k) return 0
   if (k <= 40) {
-    let d = new Float64Array(T + 1); d[0] = 1
-    for (let i = 0; i < k; i++) {
-      const nd = new Float64Array(T + 1)
-      for (let s = 0; s <= T; s++) {
-        if (!d[s]) continue
-        for (let j = 0; j < pmf.length && s + j + 1 <= T; j++) nd[s + j + 1] += d[s] * pmf[j]
-      }
-      d = nd
-    }
-    return Math.min(1, d.reduce((a, b) => a + b, 0))
+    let d = first
+    for (let i = 1; i < k; i++) d = convolve(d, each, x)
+    return cdfAt(d, x)
   }
-  const { mean, sd } = moments(pmf)
-  return normCdf((T + 0.5 - k * mean) / (sd * Math.sqrt(k)))
+  const a = moments(first), b = moments(each)
+  const mean = a.mean + (k - 1) * b.mean, sd = Math.sqrt(a.sd ** 2 + (k - 1) * b.sd ** 2)
+  return normCdf((x + 0.5 - mean) / sd)
 }
 
-// You got N 5★ in T pulls (T may include pulls since your last 5★).
-// X = 5★ a random player gets in T pulls; top = P(X > N) + P(X = N) / 2.
+// Completed run: k events took exactly S pulls. top = P(S' < S) + P(S' = S) / 2
+function sumPercentile(each, k, S, first) {
+  const le = sumCdf(each, k, S, first), lt = sumCdf(each, k, S - 1, first)
+  return lt + (le - lt) / 2
+}
+
+// Open run: k events within T pulls, the run may still be going.
+// X = events a random player gets in T pulls; top = P(X > k) + P(X = k) / 2
+function countPercentile(each, k, T, first) {
+  const ge = sumCdf(each, k, T, first), gt = sumCdf(each, k + 1, T, first)
+  return gt + (ge - gt) / 2
+}
+
+// ---- metrics ---------------------------------------------------------------------------
+
+// Lifetime 5★ speed: N 5★ in T pulls, T including the pulls since the last 5★.
 export function speedLuck(kind, N, T) {
-  const { pmf } = pityModel(kind)
-  const geN = sumCdf(pmf, N, T), gtN = sumCdf(pmf, N + 1, T)
-  return { N, T, top: gtN + (geN - gtN) / 2 }
+  return { N, T, top: countPercentile(pityDist(kind), N, T) }
 }
 
-// Non-guaranteed 5★ as a binomial: wins = rate-up ones. Character: 50%, light cone: 75%.
+// One banner's 5★ speed. The pulls end exactly on a 5★, so it is a completed run.
+export function bannerSpeed(kind, fives) {
+  const N = fives.length, S = fives.reduce((s, f) => s + f.pity, 0)
+  return { N, S, top: N ? sumPercentile(pityDist(kind), N, S) : 0.5 }
+}
+
+const isUp = f => f.result === 'win' || f.result === 'guaranteed' || f.result === 'up' || f.result === 'up_guaranteed'
+const isOffGuaranteed = f => f.result === 'guaranteed' || f.result === 'up_guaranteed'
+
+// Pulls spent on each rate-up 5★ (since the previous rate-up); `open` = pulls after the last one.
+export function upCosts(fives) {
+  const costs = []
+  let acc = 0
+  for (const f of fives) {
+    acc += f.pity
+    if (isUp(f)) { costs.push({ cost: acc, lost: isOffGuaranteed(f), f }); acc = 0 }
+  }
+  return { costs, open: acc }
+}
+
+// One banner's pulls per rate-up. Pulls after the last rate-up (a loss at the end) are
+// counted as an open run, so ending on a loss isn't treated as ending on a win.
+export function bannerEfficiency(kind, fives) {
+  const q = upChance(kind, fives[0]?.time)
+  if (q === null || !fives.length) return null
+  const { costs, open } = upCosts(fives)
+  const U = costs.length, T = costs.reduce((s, c) => s + c.cost, 0) + open
+  const each = costDist(kind, q)
+  // a banner that starts on a carried-over guarantee: its first rate-up costs one 5★
+  const first = isOffGuaranteed(fives[0]) ? pityDist(kind) : each
+  const top = open ? countPercentile(each, U, T, first) : sumPercentile(each, U, T, first)
+  return { U, T, top }
+}
+
+// 50/50s (characters) or 75/25s (light cones) as a Poisson-binomial.
 export function fiftyLuck(fives, kind = 'character') {
-  const p = UP_CHANCE[kind] ?? 0.5
-  const won = kind === 'character' ? ['win'] : ['up']
-  const lost = kind === 'character' ? ['lose'] : ['off']
+  const won = kind === 'character' ? 'win' : 'up', lost = kind === 'character' ? 'lose' : 'off'
   const ps = []
   let w = 0
   for (const f of fives) {
-    if (won.includes(f.result)) w++
-    else if (!lost.includes(f.result)) continue
-    ps.push(p)
+    if (f.result !== won && f.result !== lost) continue
+    if (f.result === won) w++
+    ps.push(upChance(kind))
   }
+  const d = poissonBinomial(ps)
+  const gt = d.slice(w + 1).reduce((a, b) => a + b, 0)
+  return { w, n: ps.length, expected: ps.reduce((a, b) => a + b, 0), top: ps.length ? gt + d[w] / 2 : 0.5 }
+}
+
+function poissonBinomial(ps) {
   let d = [1]
-  for (const q of ps) {
+  for (const p of ps) {
     const nd = new Array(d.length + 1).fill(0)
-    d.forEach((v, i) => { nd[i] += v * (1 - q); nd[i + 1] += v * q })
+    d.forEach((v, i) => { nd[i] += v * (1 - p); nd[i + 1] += v * p })
     d = nd
   }
-  const gt = d.slice(w + 1).reduce((a, b) => a + b, 0)
-  return { w, n: ps.length, expected: ps.length * p, top: ps.length ? gt + d[w] / 2 : 0.5 }
+  return d
+}
+
+// "吃满大保底": rate-ups that cost FULL_PITY pulls or more, against the expected count.
+// Fewer than expected is lucky: top = P(K < k) + P(K = k) / 2
+export function fullPityLuck(kind, fives, threshold = FULL_PITY) {
+  const { costs } = upCosts(fives)
+  if (!costs.length || upChance(kind) === null) return null
+  const ps = costs.map(c => 1 - cdfAt(costDist(kind, upChance(kind, c.f.time)), threshold - 1))
+  const k = costs.filter(c => c.cost >= threshold).length
+  const d = poissonBinomial(ps)
+  const lt = d.slice(0, k).reduce((a, b) => a + b, 0)
+  return { k, n: costs.length, expected: ps.reduce((a, b) => a + b, 0), top: lt + d[k] / 2 }
+}
+
+// Worst and best single rate-up, against players with the same number of rate-ups.
+//   worst m: luckier players have a smaller maximum: top = P(max < m) + P(max = m) / 2
+//   best m:  luckier players have a smaller minimum: top = P(min < m) + P(min = m) / 2
+export function extremesLuck(kind, fives) {
+  const { costs } = upCosts(fives)
+  if (!costs.length || upChance(kind) === null) return null
+  const dists = costs.map(c => costDist(kind, upChance(kind, c.f.time)))
+  const worst = costs.reduce((a, b) => (b.cost > a.cost ? b : a))
+  const best = costs.reduce((a, b) => (b.cost < a.cost ? b : a))
+  const allBelow = m => dists.reduce((p, d) => p * cdfAt(d, m - 1), 1)       // P(max < m)
+  const allAtLeast = m => dists.reduce((p, d) => p * (1 - cdfAt(d, m - 1)), 1) // P(min >= m)
+  const wLt = allBelow(worst.cost), wLe = allBelow(worst.cost + 1)
+  const bLt = 1 - allAtLeast(best.cost), bLe = 1 - allAtLeast(best.cost + 1)
+  return {
+    worst: { ...worst, top: wLt + (wLe - wLt) / 2 },
+    best: { ...best, top: bLt + (bLe - bLt) / 2 },
+  }
 }
 
 // Pulls per rate-up 5★: all pulls that produced a 5★, divided by the rate-up ones.
 export function upAverage(pool) {
   const fives = pool?.fives || []
-  const isUp = f => ['win', 'guaranteed', 'up', 'up_guaranteed'].includes(f.result)
   const ups = fives.filter(isUp).length
   const pulls = fives.reduce((s, f) => s + f.pity, 0)
   return { ups, pulls, avg: ups ? pulls / ups : null }
@@ -96,7 +205,7 @@ export function upAverage(pool) {
 
 // Expected pulls per rate-up 5★ under the models (a loss costs one extra 5★)
 export function expectedUpAverage(kind) {
-  if (!(kind in UP_CHANCE)) return null
-  const v = pityModel(kind).mean * (2 - UP_CHANCE[kind])
+  if (upChance(kind) === null) return null
+  const v = pityModel(kind).mean * (2 - upChance(kind))
   return { pre: v, post: v }
 }
