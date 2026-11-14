@@ -1,0 +1,10 @@
+{
+  "_comment": "Banners missing from PolyxiaBannerData (or still without ids there). Used only when the gacha_id is absent from the downloaded data.",
+  "banners": [
+    {
+      "gachaIds": ["3142"], "gachaType": "12", "kind": "light_cone_event", "version": "4.7", "phase": 1,
+      "name": "流光定影•当第一声『阿哈』响起", "start": "2026-11-11T06:00:00+08:00",
+      "up5": ["23065"], "up4": ["21016", "21020", "21047"]
+    }
+  ]
+}
