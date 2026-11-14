@@ -84,3 +84,12 @@ test('banner metrics: completed runs, open runs, full pity and extremes', async 
   // the same 60 pulls per rate-up is luckier on a character banner (expected ~93) than on light cones (~67)
   assert.ok(bannerEfficiency('character', [f(60, 'win')]).top < bannerEfficiency('lightcone', [f(60, 'up')]).top)
 })
+
+test('a loss and the guarantee it paid for are linked across concurrent banners', () => {
+  const r = new Map([['11', [rec('11', '2001', '1003', '姬子'), rec('11', '2002', '1003', '姬子'), rec('11', '2001', '1003', '姬子')]]])
+  const [lose, guar, open] = judge(r, data).pools['11'].fives
+  assert.deepEqual([lose.result, guar.result, open.result], ['lose', 'guaranteed', 'lose'])
+  assert.equal(lose.guaranteeTo.key, '2002')
+  assert.equal(guar.guaranteeFrom.key, '2001')
+  assert.equal(open.guaranteeTo, undefined)
+})

@@ -49,6 +49,8 @@
           <span class="p">{{ f.pity }}</span>
           <span class="res">
             <span class="pill"><i class="dot" :class="info(f)[1]"></i>{{ info(f)[0] }}</span>
+            <span v-if="crossOut(f)" class="cross">{{ fmt(text.ledger.guarOut, { up: upOf(crossOut(f)) }) }}</span>
+            <span v-if="crossIn(f)" class="cross">{{ fmt(text.ledger.guarIn, { up: upOf(crossIn(f)) }) }}</span>
             <span v-if="fullCost.has(f.id)" class="full" :title="fmt(text.ledger.fullPityTip, { n: fullCost.get(f.id) })">{{ fmt(text.ledger.fullPity, { n: fullCost.get(f.id) }) }}</span>
           </span>
 
@@ -87,6 +89,13 @@ const fullCost = computed(() => {
 })
 const info = f => resultInfo(f, kind.value, props.text)
 
+// same key the judge puts on each 5★, so a loss and its guarantee can be compared
+const groupKey = f => (kind.value === 'standard' ? f.time.slice(0, 7) : f.bannerKey || `unknown|${f.time}`)
+// the other end of a loss/guarantee pair, when it sits in a different group
+const crossOut = f => (f.guaranteeTo && f.guaranteeTo.key !== groupKey(f) ? f.guaranteeTo : null)
+const crossIn = f => (f.guaranteeFrom && f.guaranteeFrom.key !== groupKey(f) ? f.guaranteeFrom : null)
+const upOf = r => (r.up || []).join(' / ')
+
 const groups = computed(() => {
   const p = props.analysis.pools[pool.value]
   if (!p) return []
@@ -94,7 +103,7 @@ const groups = computed(() => {
   // groups are ordered by their most recent 5★
   const out = [], byKey = new Map()
   for (const f of [...p.fives].reverse()) {
-    const key = kind.value === 'standard' ? f.time.slice(0, 7) : f.gachaId
+    const key = groupKey(f)
     let g = byKey.get(key)
     if (!g) { g = { key, items: [] }; byKey.set(key, g); out.push(g) }
     g.items.push(f)
@@ -132,7 +141,12 @@ function tipHtml(f) {
   if (f.up?.length) h += `<div>${esc(fmt(t.currentUp, { v: f.up.join(' / ') }))}</div>`
   h += `<div>${esc(fmt(t.verdict, { v: info(f)[0] }))}</div>`
   if (f.streakBefore !== undefined && f.time >= RADIANCE_SINCE) h += `<div class="m">${esc(fmt(t.streak, { n: f.streakBefore }))}</div>`
+  const t2 = props.text.ledger
+  if (f.guaranteeTo) h += `<div>${esc(fmt(t2.guarOutTip, { up: upOf(f.guaranteeTo), name: f.guaranteeTo.name, d: f.guaranteeTo.time.slice(0, 10) }))}</div>`
+  else if (f.result === 'lose' || f.result === 'off') h += `<div>${esc(t2.guarPendingTip)}</div>`
+  if (f.guaranteeFrom) h += `<div>${esc(fmt(t2.guarInTip, { up: upOf(f.guaranteeFrom), name: f.guaranteeFrom.name, d: f.guaranteeFrom.time.slice(0, 10) }))}</div>`
   if (f.note) h += `<div class="m">${esc(f.note)}</div>`
+
   return h
 }
 function place(x, y) {
@@ -197,7 +211,8 @@ h2 { margin: 0; font-size: 16px; font-weight: 600; color: #303133 }
 .track i { position: absolute; inset: 0 auto 0 0; background: #a3a9b2; border-radius: 0 4px 4px 0 }
 .track b { position: absolute; top: -3px; bottom: -3px; border-left: 1px dashed #909399; opacity: 0.7 }
 .p { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums }
-.res { display: flex; align-items: center; gap: 6px; min-width: 0 }
+.res { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0 }
+.cross { padding: 1px 6px; border-radius: 4px; font-size: 11px; color: #2a78d6; background: #ecf5ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100% }
 .full { padding: 1px 6px; border-radius: 4px; font-size: 11px; color: #c45656; background: #fef0f0; white-space: nowrap }
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 1px 9px 1px 7px; border: 1px solid #e4e7ed; border-radius: 999px; font-size: 12px; white-space: nowrap }
 .tip { position: fixed; z-index: 3000; pointer-events: none; max-width: 300px; padding: 8px 10px; font-size: 12px; line-height: 1.6; color: #303133; background: #fff; border: 1px solid #e4e7ed; border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12) }

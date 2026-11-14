@@ -18,6 +18,14 @@ const byId = (a, b) => {
   return a.time < b.time ? -1 : a.time > b.time ? 1 : 0
 }
 
+// A loss and the guaranteed 5★ it paid for point at each other (they may sit on different banners)
+const ref = f => ({ id: f.id, name: f.name, time: f.time, key: f.bannerKey, up: f.up })
+function link(loss, guaranteed) {
+  if (!loss || !guaranteed) return
+  loss.guaranteeTo = ref(guaranteed)
+  guaranteed.guaranteeFrom = ref(loss)
+}
+
 export function judge(result, bannerData) {
   const banners = new Map()
   for (const b of bannerData?.banners || []) for (const g of b.gachaIds) banners.set(String(g), b)
@@ -36,6 +44,7 @@ export function judge(result, bannerData) {
     const recs = [...records].sort(byId)
     const fives = []
     let pity = 0, guaranteed = false, streak = 0
+    let pendingLoss = null   // the lost 5★ whose guarantee hasn't been used yet
     for (const r of recs) {
       pity++
       if (String(r.rank_type) !== '5') continue
@@ -53,6 +62,7 @@ export function judge(result, bannerData) {
         continue
       }
       f.banner = { gachaId: f.gachaId, version: b.version, phase: b.phase, name: b.name }
+      f.bannerKey = f.gachaId   // the 5★ history groups by this
       f.up = b.up5.map(id => upName(b, id))
       const inUp = b.up5.includes(f.itemId)
       if (kind === 'character') {
@@ -60,14 +70,17 @@ export function judge(result, bannerData) {
           f.result = 'guaranteed'
           if (!inUp) { f.note = 'lost a guaranteed pull'; issues.push({ pool: key, ...f }) }
           guaranteed = false
+          link(pendingLoss, f); pendingLoss = null
         } else {
           f.streakBefore = streak
-          if (inUp) { f.result = 'win'; streak = 0 } else { f.result = 'lose'; guaranteed = true; streak++ }
+          if (inUp) { f.result = 'win'; streak = 0 } else { f.result = 'lose'; guaranteed = true; streak++; pendingLoss = f }
         }
       } else {
         // light cones: 75% rate-up, then guaranteed
         f.result = inUp ? (guaranteed ? 'up_guaranteed' : 'up') : 'off'
         if (guaranteed && !inUp) { f.note = 'off-banner right after off-banner'; issues.push({ pool: key, ...f }) }
+        if (guaranteed) { link(pendingLoss, f); pendingLoss = null }
+        if (!inUp) pendingLoss = f
         guaranteed = !inUp
       }
     }

@@ -187,5 +187,10 @@
   "ui.analysis.fortune.bannerSpeed": "5★ speed: {n} × 5★ in {t} pulls · {v}",
   "ui.analysis.fortune.bannerFifty": "50/50: won {w} of {n} · {v}",
   "ui.analysis.ledger.fullPity": "Full {n}",
-  "ui.analysis.ledger.fullPityTip": "This rate-up took {n} pulls (lost the 50/50, then hit the guarantee late)"
+  "ui.analysis.ledger.fullPityTip": "This rate-up took {n} pulls (lost the 50/50, then hit the guarantee late)",
+  "ui.analysis.ledger.guarOut": "guar.→{up}",
+  "ui.analysis.ledger.guarIn": "←lost on {up}",
+  "ui.analysis.ledger.guarOutTip": "Lost here; the guarantee went to {name} on the {up} banner ({d})",
+  "ui.analysis.ledger.guarPendingTip": "Lost here; the guarantee hasn't been used yet",
+  "ui.analysis.ledger.guarInTip": "Guaranteed after losing to {name} on the {up} banner ({d})"
 }

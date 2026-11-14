@@ -187,5 +187,10 @@
   "ui.analysis.fortune.bannerSpeed": "出金速度：{n} 个 5★ 用了 {t} 抽 · {v}",
   "ui.analysis.fortune.bannerFifty": "小保底：{n} 次没歪 {w} 次 · {v}",
   "ui.analysis.ledger.fullPity": "吃满 {n}",
-  "ui.analysis.ledger.fullPityTip": "这个 UP 一共花了 {n} 抽（歪了之后再吃大保底）"
+  "ui.analysis.ledger.fullPityTip": "这个 UP 一共花了 {n} 抽（歪了之后再吃大保底）",
+  "ui.analysis.ledger.guarOut": "保底→{up}",
+  "ui.analysis.ledger.guarIn": "←{up}池歪",
+  "ui.analysis.ledger.guarOutTip": "这次歪了，大保底用在了 {up} 池的 {name}（{d}）",
+  "ui.analysis.ledger.guarPendingTip": "这次歪了，大保底还没用",
+  "ui.analysis.ledger.guarInTip": "这是在 {up} 池歪了 {name}（{d}）之后的大保底"
 }
