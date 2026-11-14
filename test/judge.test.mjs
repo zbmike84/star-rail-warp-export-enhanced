@@ -72,15 +72,16 @@ test('luck helpers for Star Rail rules', () => {
 })
 
 test('banner metrics: completed runs, open runs, full pity and extremes', async () => {
-  const { bannerSpeed, bannerEfficiency, fullPityLuck, extremesLuck, upCosts } = await import('../src/renderer/luck.js')
+  const { bannerSpeed, bannerEfficiency, fullPityLuck, bannerExtremes, upCosts } = await import('../src/renderer/luck.js')
   const f = (pity, result) => ({ pity, result, time: '2024-01-01', id: String(seq++), name: 'x' })
   assert.ok(bannerSpeed('character', [f(89, 'win')]).top > 0.99, 'one 5★ at 89 is the worst case')
   assert.ok(bannerEfficiency('character', [f(70, 'win'), f(80, 'lose')]).top > bannerEfficiency('character', [f(70, 'win')]).top)
   const fives = [f(80, 'lose'), f(78, 'guaranteed'), f(10, 'win')]
   assert.deepEqual(upCosts(fives).costs.map(c => c.cost), [158, 10])
   assert.equal(fullPityLuck('character', fives).k, 1)
-  const ex = extremesLuck('character', fives)
-  assert.deepEqual([ex.worst.cost, ex.best.cost], [158, 10])
+  const keyed = [...fives.map(x => ({ ...x, bannerKey: 'a' })), { ...f(15, 'win'), bannerKey: 'b' }, { ...f(20, 'win'), bannerKey: 'b' }]
+  const ex = bannerExtremes('character', keyed)
+  assert.deepEqual([ex.n, ex.worst.first.bannerKey, ex.best.first.bannerKey], [2, 'a', 'b'])
   // the same 60 pulls per rate-up is luckier on a character banner (expected ~93) than on light cones (~67)
   assert.ok(bannerEfficiency('character', [f(60, 'win')]).top < bannerEfficiency('lightcone', [f(60, 'up')]).top)
 })

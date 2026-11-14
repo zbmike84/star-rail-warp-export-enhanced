@@ -176,23 +176,31 @@ export function fullPityLuck(kind, fives, threshold = FULL_PITY) {
   return { k, n: costs.length, expected: ps.reduce((a, b) => a + b, 0), top: lt + d[k] / 2 }
 }
 
-// Worst and best single rate-up, against players with the same number of rate-ups.
-//   worst m: luckier players have a smaller maximum: top = P(max < m) + P(max = m) / 2
-//   best m:  luckier players have a smaller minimum: top = P(min < m) + P(min = m) / 2
-export function extremesLuck(kind, fives) {
-  const { costs } = upCosts(fives)
-  if (!costs.length || upChance(kind) === null) return null
-  const dists = costs.map(c => costDist(kind, upChance(kind, c.f.time)))
-  const worst = costs.reduce((a, b) => (b.cost > a.cost ? b : a))
-  const best = costs.reduce((a, b) => (b.cost < a.cost ? b : a))
-  const allBelow = m => dists.reduce((p, d) => p * cdfAt(d, m - 1), 1)       // P(max < m)
-  const allAtLeast = m => dists.reduce((p, d) => p * (1 - cdfAt(d, m - 1)), 1) // P(min >= m)
-  const wLt = allBelow(worst.cost), wLe = allBelow(worst.cost + 1)
-  const bLt = 1 - allAtLeast(best.cost), bLe = 1 - allAtLeast(best.cost + 1)
-  return {
-    worst: { ...worst, top: wLt + (wLe - wLt) / 2 },
-    best: { ...best, top: bLt + (bLe - bLt) / 2 },
+// Worst and best banner: ranked by pulls spent beyond what its rate-ups should have cost
+// ("spent a lot, got few rate-ups"), so a small banner with one slow pull doesn't outrank a
+// big one. excess = T - expected pulls for U rate-ups (a banner opening on a carried
+// guarantee expects one 5★ for its first). The tier shown is the banner's own efficiency.
+export function bannerExtremes(kind, fives) {
+  if (upChance(kind) === null) return null
+  const groups = new Map()
+  for (const f of fives) {
+    if (!f.bannerKey) continue
+    if (!groups.has(f.bannerKey)) groups.set(f.bannerKey, [])
+    groups.get(f.bannerKey).push(f)
   }
+  const banners = []
+  for (const items of groups.values()) {
+    const e = bannerEfficiency(kind, items)
+    if (!e) continue
+    const cost = moments(costDist(kind, upChance(kind, items[0].time))).mean
+    const single = moments(pityDist(kind)).mean
+    const expected = e.U === 0 ? 0 : (isOffGuaranteed(items[0]) ? single : cost) + (e.U - 1) * cost
+    banners.push({ ...e, expected, excess: e.T - expected, first: items[0] })
+  }
+  if (!banners.length) return null
+  const worst = banners.reduce((a, b) => (b.excess > a.excess ? b : a))
+  const best = banners.reduce((a, b) => (b.excess < a.excess ? b : a))
+  return { n: banners.length, worst, best }
 }
 
 // Pulls per rate-up 5★: all pulls that produced a 5★, divided by the rate-up ones.

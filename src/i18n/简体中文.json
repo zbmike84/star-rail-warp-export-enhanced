@@ -167,7 +167,7 @@
   "ui.analysis.fortune.fiftyDetail": "{n} 次 50/50 没歪 {w} 次，期望 {e} 次",
   "ui.analysis.fortune.top": "前 {p}%",
   "ui.analysis.fortune.bottom": "后 {p}%",
-  "ui.analysis.fortune.note": "基于社区整理的概率模型（角色 0.6%，74 抽起每抽 +6%，90 抽保底；光锥 0.8%，66 抽起每抽 +7%，80 抽保底）。“最惨/最欧的一次”是和出了同样多 UP 的玩家比较。分档：前 5% 欧皇，5–25% 欧，25–75% 正常，75–95% 非，最后 5% 大非酋。",
+  "ui.analysis.fortune.note": "基于社区整理的概率模型（角色 0.6%，74 抽起每抽 +6%，90 抽保底；光锥 0.8%，66 抽起每抽 +7%，80 抽保底）。“最惨/最欧的卡池”按实际抽数和期望抽数的差来挑，档位是那一期自己的出 UP 效率。分档：前 5% 欧皇，5–25% 欧，25–75% 正常，75–95% 非，最后 5% 大非酋。",
   "ui.analysis.tier.blessed": "欧皇",
   "ui.analysis.tier.lucky": "欧",
   "ui.analysis.tier.average": "正常",
@@ -179,9 +179,6 @@
   "ui.analysis.fortune.up75Detail": "{n} 次非保底出 UP {w} 次，期望 {e} 次",
   "ui.analysis.fortune.fullPity": "吃满大保底（≥{th} 抽）",
   "ui.analysis.fortune.fullPityDetail": "{n} 个 UP 里有 {k} 个花了 {th} 抽以上，期望 {e} 个",
-  "ui.analysis.fortune.worst": "最惨的一次",
-  "ui.analysis.fortune.best": "最欧的一次",
-  "ui.analysis.fortune.extremeDetail": "{name}，{c} 抽出 UP（{d}）",
   "ui.analysis.fortune.effShort": "出 UP",
   "ui.analysis.fortune.bannerEff": "出 UP 效率：{u} 个 UP 用了 {t} 抽 · {v}",
   "ui.analysis.fortune.bannerSpeed": "出金速度：{n} 个 5★ 用了 {t} 抽 · {v}",
@@ -192,5 +189,9 @@
   "ui.analysis.ledger.guarIn": "←{up}池歪",
   "ui.analysis.ledger.guarOutTip": "这次歪了，大保底用在了 {up} 池的 {name}（{d}）",
   "ui.analysis.ledger.guarPendingTip": "这次歪了，大保底还没用",
-  "ui.analysis.ledger.guarInTip": "这是在 {up} 池歪了 {name}（{d}）之后的大保底"
+  "ui.analysis.ledger.guarInTip": "这是在 {up} 池歪了 {name}（{d}）之后的大保底",
+  "ui.analysis.fortune.worstBanner": "最惨的卡池",
+  "ui.analysis.fortune.bestBanner": "最欧的卡池",
+  "ui.analysis.fortune.worstBannerDetail": "{up}（{v}）：{t} 抽出了 {u} 个 UP，按期望 {e} 抽就够，多花了 {x} 抽",
+  "ui.analysis.fortune.bestBannerDetail": "{up}（{v}）：{t} 抽出了 {u} 个 UP，按期望要 {e} 抽，省了 {x} 抽"
 }

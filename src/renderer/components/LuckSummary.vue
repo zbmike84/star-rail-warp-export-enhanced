@@ -22,7 +22,7 @@
 <script setup>
 import { computed } from 'vue'
 import { fmt, topText, TIER_COLORS, POOL_ORDER } from '../analysisUi'
-import { speedLuck, fiftyLuck, fullPityLuck, extremesLuck, upChance, tierOf, FULL_PITY } from '../luck.js'
+import { speedLuck, fiftyLuck, fullPityLuck, bannerExtremes, upChance, tierOf, FULL_PITY } from '../luck.js'
 
 const props = defineProps({ analysis: Object, typeMap: Map, text: Object })
 // bar reads unlucky (left) -> lucky (right); the marker sits at 1 - top. Widths in %.
@@ -51,11 +51,17 @@ const groups = computed(() => {
       const fp = fullPityLuck(p.kind, p.fives)
       if (fp) row('full', fmt(t.fullPity, { th: FULL_PITY }), fp.top,
         fmt(t.fullPityDetail, { n: fp.n, k: fp.k, th: FULL_PITY, e: fp.expected.toFixed(1) }))
-      const ex = extremesLuck(p.kind, p.fives)
-      if (ex) {
-        row('worst', t.worst, ex.worst.top, fmt(t.extremeDetail, { name: ex.worst.f.name, c: ex.worst.cost, d: ex.worst.f.time.slice(0, 10) }))
-        row('best', t.best, ex.best.top, fmt(t.extremeDetail, { name: ex.best.f.name, c: ex.best.cost, d: ex.best.f.time.slice(0, 10) }))
-      }
+    }
+    // banners where you spent the most / least beyond what their rate-ups should have cost
+    const ex = bannerExtremes(p.kind, p.fives)
+    if (ex && ex.n > 1) {
+      const d = (b, tpl) => fmt(tpl, {
+        up: (b.first.up || []).join(' / '), v: b.first.banner?.version || '', t: b.T, u: b.U,
+        e: Math.round(b.expected), x: Math.abs(Math.round(b.excess)),
+      })
+      // a few pulls either way isn't worth a row
+      if (ex.worst.excess >= 10) row('worst', t.worstBanner, ex.worst.top, d(ex.worst, t.worstBannerDetail))
+      if (ex.best.excess <= -10) row('best', t.bestBanner, ex.best.top, d(ex.best, t.bestBannerDetail))
     }
     out.push({ key: k, name: props.typeMap.get(k) || k, rows })
   }
